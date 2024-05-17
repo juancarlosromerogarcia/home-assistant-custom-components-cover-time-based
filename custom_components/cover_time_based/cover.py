@@ -193,18 +193,26 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         """Turn the device close."""
         _LOGGER.debug('async_close_cover')
         if self.tc.current_position() > 0:
+            # Disable the open button
+            await self.hass.services.async_call("homeassistant", "turn_off", {"entity_id": self._open_switch_entity_id}, False)
             self.tc.start_travel_down()
             self.start_auto_updater()
             await self._async_handle_command(SERVICE_CLOSE_COVER)
+            # Re-enable the open button after the cover has stopped
+            await self.hass.services.async_call("homeassistant", "turn_on", {"entity_id": self._open_switch_entity_id}, False)
 
     async def async_open_cover(self, **kwargs):
         """Turn the device open."""
         _LOGGER.debug('async_open_cover')
 
         if self.tc.current_position() < 100:
+            # Disable the close button
+            await self.hass.services.async_call("homeassistant", "turn_off", {"entity_id": self._close_switch_entity_id}, False)
             self.tc.start_travel_up()
             self.start_auto_updater()
             await self._async_handle_command(SERVICE_OPEN_COVER)
+            # Re-enable the close button after the cover has stopped
+            await self.hass.services.async_call("homeassistant", "turn_on", {"entity_id": self._close_switch_entity_id}, False)
 
     async def async_stop_cover(self, **kwargs):
         """Turn the device stop."""
