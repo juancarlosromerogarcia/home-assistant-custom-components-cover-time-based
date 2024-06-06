@@ -192,32 +192,29 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     async def async_close_cover(self, **kwargs):
         """Turn the device close."""
         _LOGGER.debug('async_close_cover')
-        if self.tc.current_position() > 0:
-            # Disable the open button
-            await self.hass.services.async_call("homeassistant", "turn_off", {"entity_id": self._open_switch_entity_id}, False)
-            self.tc.start_travel_down()
-            self.start_auto_updater()
-            await self._async_handle_command(SERVICE_CLOSE_COVER)
-            # Re-enable the open button after the cover has stopped
-            await self.hass.services.async_call("homeassistant", "turn_on", {"entity_id": self._open_switch_entity_id}, False)
+        self.tc.start_travel_down()
+
+        self.start_auto_updater()
+        # Actualizar el estado del botón aquí
+        self.async_schedule_update_ha_state()
+        await self._async_handle_command(SERVICE_CLOSE_COVER)
 
     async def async_open_cover(self, **kwargs):
         """Turn the device open."""
         _LOGGER.debug('async_open_cover')
+        self.tc.start_travel_up()
 
-        if self.tc.current_position() < 100:
-            # Disable the close button
-            await self.hass.services.async_call("homeassistant", "turn_off", {"entity_id": self._close_switch_entity_id}, False)
-            self.tc.start_travel_up()
-            self.start_auto_updater()
-            await self._async_handle_command(SERVICE_OPEN_COVER)
-            # Re-enable the close button after the cover has stopped
-            await self.hass.services.async_call("homeassistant", "turn_on", {"entity_id": self._close_switch_entity_id}, False)
+        self.start_auto_updater()
+        # Actualizar el estado del botón aquí
+        self.async_schedule_update_ha_state()
+        await self._async_handle_command(SERVICE_OPEN_COVER)
 
     async def async_stop_cover(self, **kwargs):
         """Turn the device stop."""
         _LOGGER.debug('async_stop_cover')
-        self._handle_stop()
+        self._handle_my_button()
+        # Actualizar el estado del botón aquí
+        self.async_schedule_update_ha_state()
         await self._async_handle_command(SERVICE_STOP_COVER)
 
     async def set_position(self, position):
@@ -305,3 +302,39 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         
         # Update state of entity
         self.async_write_ha_state()
+
+    async def async_get_current_service(self):
+        """Return the current service that is executing."""
+        service_data = self.hass.data.get('cover', {}).get(self.entity_id)
+        if service_data is None:
+            return None
+
+        service = service_data.get('service')
+        if service is None:
+            return None
+
+        if service == 'close_cover':
+            return SERVICE_CLOSE_COVER
+        elif service == 'open_cover':
+            return SERVICE_OPEN_COVER
+        elif service == 'stop_cover':
+            return SERVICE_STOP_COVER
+        else:
+            return None
+    
+    async def async_render(self, item):
+        """Render the cover entity."""
+        service = await self.async_get_current_service()
+        is_opening = service == SERVICE_OPEN_COVER
+        is_closing = service == SERVICE_CLOSE_COVER
+        is_stopped = service == SERVICE_STOP_COVER
+
+        if is_opening:
+            self._close_button.disabled = True
+        elif is_closing:
+            self._open_button.disabled = True
+        else:
+            self._open_button.disabled = False
+            self._close_button.disabled = False
+
+        await super().async_render(item)
